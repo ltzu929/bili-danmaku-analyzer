@@ -1,0 +1,115 @@
+{
+  "name": "bilibili-danmaku-analyzer",
+  "version": "1.0.0",
+  "description": "智能B站视频弹幕分析工具，支持弹幕密度分析、热门弹幕识别、多维度数据筛选",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"vite\"",
+    "build": "tsc -b && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "server": "node api/server.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "typecheck": "tsc --noEmit",
+    "electron:dev": "concurrently \"npm run server\" \"vite\" \"electron .\"",
+    "electron:build": "vite build && electron-builder -w nsis",
+    "release:patch": "npm version patch -m \"chore: release %s\"",
+    "release:minor": "npm version minor -m \"chore: release %s\"",
+    "release:major": "npm version major -m \"chore: release %s\""
+  },
+  "keywords": [
+    "bilibili",
+    "danmaku",
+    "弹幕分析",
+    "数据可视化",
+    "React",
+    "TypeScript",
+    "Vite",
+    "Tailwind CSS"
+  ],
+  "author": "Your Name <your-email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ltzu929/bili-danmaku-analyzer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ltzu929/plugin/issues"
+  },
+  "homepage": "https://github.com/ltzu929/bili-danmaku-analyzer#readme",
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "cos-nodejs-sdk-v5": "^2.11.8",
+    "express": "^4.18.2",
+    "lucide-react": "^0.263.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^3.4.0",
+    "tencentcloud-sdk-nodejs": "^4.0.869",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.2",
+    "@typescript-eslint/parser": "^6.7.2",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.14",
+    "babel-plugin-react-dev-locator": "^1.0.6",
+    "concurrently": "^8.2.0",
+    "electron": "28.2.3",
+    "electron-builder": "24.6.4",
+    "electron-updater": "6.1.8",
+    "eslint": "^8.50.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "postcss": "^8.4.24",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5.2.2",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^5.4.1",
+    "vite-plugin-trae-solo-badge": "^1.0.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^0.34.6"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "build": {
+    "appId": "com.example.bilibili.danmaku",
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ltzu929",
+        "repo": "bili-danmaku-analyzer"
+      }
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
