@@ -1,6 +1,6 @@
 {
   "name": "bilibili-danmaku-analyzer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "智能B站视频弹幕分析工具，支持弹幕密度分析、热门弹幕识别、多维度数据筛选",
   "main": "electron/main.cjs",
   "scripts": {
