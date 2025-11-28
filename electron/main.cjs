@@ -1,8 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
-const { autoUpdater } = require('electron-updater')
+let autoUpdater
+try { ({ autoUpdater } = require('electron-updater')) } catch {}
 
-require(path.join(__dirname, '../api/server.js'))
+(async () => {
+  try {
+    await import(path.join(__dirname, '../api/server.js'))
+  } catch {}
+})()
 
 function sendToAll(channel, payload) {
   BrowserWindow.getAllWindows().forEach(win => {
@@ -24,7 +29,9 @@ function createWindow () {
 
 app.whenReady().then(() => {
   createWindow()
-  autoUpdater.checkForUpdatesAndNotify()
+  if (autoUpdater && typeof autoUpdater.checkForUpdatesAndNotify === 'function') {
+    autoUpdater.checkForUpdatesAndNotify()
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -34,19 +41,27 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-autoUpdater.on('checking-for-update', () => sendToAll('update-checking', {}))
-autoUpdater.on('update-available', info => sendToAll('update-available', info))
-autoUpdater.on('update-not-available', info => sendToAll('update-none', info))
-autoUpdater.on('download-progress', progress => sendToAll('update-progress', progress))
-autoUpdater.on('update-downloaded', info => sendToAll('update-downloaded', info))
-autoUpdater.on('error', err => sendToAll('update-error', { message: err && err.message }))
+if (autoUpdater) {
+  autoUpdater.on('checking-for-update', () => sendToAll('update-checking', {}))
+  autoUpdater.on('update-available', info => sendToAll('update-available', info))
+  autoUpdater.on('update-not-available', info => sendToAll('update-none', info))
+  autoUpdater.on('download-progress', progress => sendToAll('update-progress', progress))
+  autoUpdater.on('update-downloaded', info => sendToAll('update-downloaded', info))
+  autoUpdater.on('error', err => sendToAll('update-error', { message: err && err.message }))
+}
 
 ipcMain.on('update-check', () => {
-  autoUpdater.checkForUpdates()
+  if (autoUpdater && typeof autoUpdater.checkForUpdates === 'function') {
+    autoUpdater.checkForUpdates()
+  } else {
+    sendToAll('update-error', { message: 'updater disabled' })
+  }
 })
 
 ipcMain.on('update-install', () => {
-  autoUpdater.quitAndInstall()
+  if (autoUpdater && typeof autoUpdater.quitAndInstall === 'function') {
+    autoUpdater.quitAndInstall()
+  }
 })
 
 ipcMain.handle('choose-dir', async () => {
