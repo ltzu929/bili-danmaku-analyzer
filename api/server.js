@@ -13,8 +13,11 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// 定义数据存储的根目录，放在用户的主目录下
+const USER_DATA_DIR = path.join(os.homedir(), '.bili-danmaku-analyzer-data');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const CONFIG_FILE_PATH = path.join(USER_DATA_DIR, 'config.ini');
 
 const app = express();
 const PORT = 3001;
@@ -26,7 +29,9 @@ const upload = multer();
 // 存储弹幕数据的简单数据库
 let danmakuData = {};
 let upSeriesCache = {};
-const historyDir = path.join(process.cwd(), 'data');
+
+// 确保存储目录存在，如果不存在后面会自动创建
+const historyDir = USER_DATA_DIR;
 const historyFile = path.join(historyDir, 'up_history.json');
 
 let audioWatchProc = null;
@@ -79,8 +84,7 @@ function parseIni(text) {
 async function getASRConfig() {
   let ini = {};
   try {
-    const p = path.join(process.cwd(), 'config.ini');
-    const s = await fs.readFile(p, 'utf-8');
+    const s = await fs.readFile(CONFIG_FILE_PATH, 'utf-8');
     ini = parseIni(s);
   } catch {}
   const env = process.env;

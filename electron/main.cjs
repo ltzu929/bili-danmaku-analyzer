@@ -1,12 +1,17 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
+const { pathToFileURL } = require('url')
 let autoUpdater
 try { ({ autoUpdater } = require('electron-updater')) } catch {}
 
 (async () => {
   try {
-    await import(path.join(__dirname, '../api/server.js'))
-  } catch {}
+    const url = pathToFileURL(path.join(__dirname, '../api/server.js')).href
+    await import(url)
+    console.log('backend started')
+  } catch (e) {
+    console.error('backend start failed', e && e.message)
+  }
 })()
 
 function sendToAll(channel, payload) {
@@ -73,3 +78,15 @@ ipcMain.handle('choose-dir', async () => {
     return { path: '' }
   }
 })
+
+// 处理 get-history 事件
+ipcMain.handle('get-history', async () => {
+  // 从 store 中获取历史记录，默认为一个空对象
+  return store.get('history', {});
+});
+
+// 处理 set-history 事件
+ipcMain.on('set-history', (event, history) => {
+  // 将历史记录设置到 store 中
+  store.set('history', history);
+});

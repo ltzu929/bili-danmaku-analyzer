@@ -93,8 +93,7 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
   const deleteHistory = (url: string) => {
     const next = history.filter(h => h.url !== url);
     setHistory(next);
-    try { localStorage.setItem('up_series_history', JSON.stringify(next)); } catch {}
-    apiFetch(`/api/history?url=${encodeURIComponent(url)}`, { method: 'DELETE' }).catch(() => {});
+    (window as any).electronStore.setHistory(next.reduce((acc: any, cur: any) => ({ ...acc, [cur.url]: cur }), {}));
   };
 
   const clearHistory = () => {
