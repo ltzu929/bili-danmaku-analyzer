@@ -278,19 +278,7 @@ async function parseLiveReplayUrl(url) {
     if (recordMatch) {
       roomId = recordMatch[1];
       console.log('检测到直播回放格式，房间ID:', roomId);
-      
-      // 获取直播间信息以确定日期
-      const roomInfo = await getRoomInfo(roomId);
-      if (roomInfo && roomInfo.data && roomInfo.data.live_time) {
-        try {
-          const liveTime = new Date(roomInfo.data.live_time * 1000);
-          date = liveTime.toISOString().split('T')[0];
-          console.log('获取到直播日期:', date);
-        } catch (dateError) {
-          console.error('日期格式化失败:', dateError);
-          date = new Date().toISOString().split('T')[0];
-        }
-      }
+      // 不再获取直播间信息
     }
     
     // 3. 如果不是直播回放，尝试匹配普通视频BV号
@@ -350,25 +338,6 @@ async function parseLiveReplayUrl(url) {
   } catch (error) {
     console.error('解析URL失败:', error.message);
     return { error: 'URL解析失败: ' + error.message };
-  }
-}
-
-/**
- * 获取直播间详细信息
- * @param {string} roomId - 直播间ID
- * @returns {Promise<Object|null>} 直播间信息对象或null
- */
-async function getRoomInfo(roomId) {
-  try {
-    const response = await axios.get(`https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('获取直播间信息失败:', error.message);
-    return null;
   }
 }
 
@@ -772,27 +741,7 @@ app.get('/api/danmaku/search/:roomId/:date', async (req, res) => {
   }
 });
 
-/**
- * API: 获取直播间基本信息
- * 路径: /api/room/:roomId
- * 方法: GET
- */
-app.get('/api/room/:roomId', async (req, res) => {
-  const { roomId } = req.params;
-  
-  try {
-    const response = await axios.get(`https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-    
-    res.json(response.data);
-  } catch (error) {
-    console.error('获取直播间信息失败:', error);
-    res.status(500).json({ error: '无法获取直播间信息' });
-  }
-});
+
 
 /**
  * API: 代理获取图片（解决防盗链问题）
