@@ -1452,6 +1452,7 @@ app.post('/api/analyze', async (req, res) => {
       cover: cover,
       date: parsedUrl.date,
       url: parsedUrl.realUrl,
+      videoOwner: parsedUrl.videoOwner,
       totalDanmakus: danmakus.length,
       danmakus,
       stats,
