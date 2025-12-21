@@ -27,10 +27,6 @@ export default function MainApp() {
     setActiveTab('danmaku');
   };
 
-  const handleTextGenerated = (text: string) => {
-    console.log('生成的文字:', text);
-  };
-
   const handleReturnHome = () => {
     setAnalysisData(null);
     setSelectedVideo(null);

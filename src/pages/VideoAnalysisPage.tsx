@@ -1,20 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react';
 import { apiUrl } from '@/lib/api';
-import { ArrowLeft, Download, Share2, Calendar, User } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, User } from 'lucide-react';
 import DanmakuChart from '../components/DanmakuChart';
 import KeywordSearch from '../components/KeywordSearch';
-
-interface VideoInfo {
-  bvid: string;
-  title: string;
-  date: string;
-  url: string;
-  videoOwner?: {
-    mid: number;
-    name: string;
-    face: string;
-  };
-}
 
 interface DanmakuData {
   bvid: string;
@@ -60,7 +49,9 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
             const json = await resp.json();
             if (!ignore) setCover(json.cover || '');
           }
-        } catch {}
+        } catch (e) {
+          console.error('Failed to load cover:', e);
+        }
       }
     };
     load();
@@ -80,20 +71,6 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
     URL.revokeObjectURL(url);
   };
 
-  const handleShare = () => {
-    const shareUrl = `${window.location.origin}/analysis?bvid=${data.bvid}`;
-    if (navigator.share) {
-      navigator.share({
-        title: `B站视频弹幕分析 - ${data.title}`,
-        text: `视频 ${data.title} 的弹幕分析报告`,
-        url: shareUrl
-      });
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      alert('分析链接已复制到剪贴板');
-    }
-  };
-
   // 下载封面：通过后端封面代理接口获取二进制并触发浏览器下载
   const handleDownloadCover = async () => {
     try {
@@ -105,7 +82,9 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
           const s = JSON.parse(raw);
           if (typeof s.coverDownloadPath === 'string') targetPath = s.coverDownloadPath;
         }
-      } catch {}
+      } catch (e) {
+        console.error('Failed to read settings:', e);
+      }
 
       if (targetPath) {
         const resp = await fetch(apiUrl('/api/save-cover'), {
@@ -134,7 +113,9 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch {}
+    } catch (e) {
+      console.error('Failed to download cover:', e);
+    }
   };
 
   if (!data) {
@@ -185,11 +166,11 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
                 导出
               </button>
               <button
-                onClick={handleShare}
+                onClick={() => window.open(data.url, '_blank')}
                 className="flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
               >
-                <Share2 className="w-4 h-4 mr-1.5" />
-                分享
+                <ExternalLink className="w-4 h-4 mr-1.5" />
+                跳转视频
               </button>
               {data.videoOwner && (
                 <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-sm">

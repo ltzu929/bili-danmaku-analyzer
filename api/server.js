@@ -6,10 +6,6 @@ import cron from 'node-cron';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import multer from 'multer';
-import COS from 'cos-nodejs-sdk-v5';
-import tencentcloud from 'tencentcloud-sdk-nodejs';
-import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -34,7 +30,6 @@ const PORT = 3001;
 // 中间件配置
 app.use(cors()); // 允许跨域请求
 app.use(express.json()); // 解析JSON请求体
-const upload = multer(); // 处理文件上传
 
 // ==========================================
 // 内存数据存储
@@ -48,10 +43,6 @@ let upSeriesCache = {};
 // 历史记录存储路径配置
 const historyDir = USER_DATA_DIR;
 const historyFile = path.join(historyDir, 'up_history.json');
-
-// 音频监控进程和日志存储
-let audioWatchProc = null;
-let audioWatchLog = [];
 
 // ==========================================
 // 辅助工具函数
@@ -125,32 +116,6 @@ function parseIni(text) {
   return out;
 }
 
-/**
- * 获取语音识别(ASR)配置
- * 优先从环境变量获取，其次从配置文件获取
- * @returns {Promise<Object>} 配置对象
- */
-async function getASRConfig() {
-  let ini = {};
-  try {
-    const s = await fs.readFile(CONFIG_FILE_PATH, 'utf-8');
-    ini = parseIni(s);
-  } catch {}
-  const env = process.env;
-  // 兼容不同的配置节名称
-  const auth = ini.auth || ini.TencentCloud || {};
-  const cos = ini.cos || {};
-  const asr = ini.asr || {};
-  
-  // 提取配置项
-  const SecretId = env.TC_SECRET_ID || auth.SecretId || '';
-  const SecretKey = env.TC_SECRET_KEY || auth.SecretKey || '';
-  const Region = env.TC_REGION || auth.Region || cos.Region || asr.Region || '';
-  const Bucket = env.TC_COS_BUCKET || auth.Bucket || cos.Bucket || '';
-  const EngineModelType = env.TC_ASR_ENGINE || asr.EngineModelType || '16k_zh';
-  
-  return { SecretId, SecretKey, Region, Bucket, EngineModelType };
-}
 
 // ==========================================
 // B站视频弹幕处理逻辑
@@ -822,276 +787,6 @@ app.post('/api/save-cover', async (req, res) => {
   }
 });
 
-/**
- * API: 音频转文字 (ASR)
- * 路径: /api/audio-to-text
- * 方法: POST
- * 参数: audio (文件上传)
- * 流程: 上传到COS -> 调用腾讯云ASR -> 轮询结果 -> 生成SRT字幕
- */
-app.post('/api/audio-to-text', upload.single('audio'), async (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) return res.status(400).json({ error: 'missing audio' });
-    
-    // 获取配置
-    const cfg = await getASRConfig();
-    if (!cfg.SecretId || !cfg.SecretKey || !cfg.Region || !cfg.Bucket) return res.status(400).json({ error: 'missing credentials' });
-    
-    // 初始化COS客户端
-    const cos = new COS({ SecretId: cfg.SecretId, SecretKey: cfg.SecretKey });
-    const key = `asr/${Date.now()}_${String(file.originalname || 'audio').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    
-    // 1. 上传音频文件到COS
-    await new Promise((resolve, reject) => {
-      cos.putObject({ Bucket: cfg.Bucket, Region: cfg.Region, Key: key, StorageClass: 'STANDARD', Body: file.buffer }, (err, data) => {
-        if (err) reject(err); else resolve(data);
-      });
-    });
-    
-    // 获取带签名的文件URL
-    const signed = cos.getObjectUrl({ Bucket: cfg.Bucket, Region: cfg.Region, Key: key, Sign: true, Expires: 3600 });
-    
-    // 2. 创建录音识别任务
-    const AsrClient = tencentcloud.asr.v20190614.Client;
-    const client = new AsrClient({ credential: { secretId: cfg.SecretId, secretKey: cfg.SecretKey }, region: cfg.Region, profile: { httpProfile: { endpoint: 'asr.tencentcloudapi.com' } } });
-    const create = await client.CreateRecTask({ EngineModelType: cfg.EngineModelType, ChannelNum: 1, ResTextFormat: 3, SourceType: 0, Url: signed });
-    const taskId = create.Data.TaskId;
-    
-    // 3. 轮询任务状态
-    let resultDetail = null;
-    const started = Date.now();
-    while (Date.now() - started < 10 * 60 * 1000) { // 最多等待10分钟
-      const st = await client.DescribeTaskStatus({ TaskId: taskId });
-      const s = st.Data.StatusStr || st.Data.Status || '';
-      if (String(s).toLowerCase() === 'success') { resultDetail = st.Data.ResultDetail || []; break; }
-      if (String(s).toLowerCase() === 'failed') { break; }
-      await new Promise(r => setTimeout(r, 5000)); // 每5秒轮询一次
-    }
-    
-    // 清理COS文件
-    try { cos.deleteObject({ Bucket: cfg.Bucket, Region: cfg.Region, Key: key }, () => {}); } catch {}
-    
-    if (!resultDetail || !Array.isArray(resultDetail) || resultDetail.length === 0) return res.status(500).json({ error: 'recognition failed' });
-    
-    // 4. 格式化为SRT字幕
-    const fmt = (ms) => {
-      const total = Math.floor(Number(ms) || 0);
-      const hh = Math.floor(total / 3600000);
-      const mm = Math.floor((total % 3600000) / 60000);
-      const ss = Math.floor((total % 60000) / 1000);
-      const ms3 = Math.floor(total % 1000);
-      return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')},${String(ms3).padStart(3, '0')}`;
-    };
-    
-    let out = '';
-    for (let i = 0; i < resultDetail.length; i++) {
-      const it = resultDetail[i];
-      const start = fmt(it.StartMs);
-      const end = fmt(it.EndMs);
-      const text = String(it.FinalSentence || '').replace(/[，。,.]/g, '');
-      out += `${i + 1}\n${start} --> ${end}\n${text}\n\n`;
-    }
-    
-    res.json({ srt: out });
-  } catch (e) {
-    res.status(500).json({ error: 'audio to text failed' });
-  }
-});
-
-// ==========================================
-// 音频监控与ASR配置 API
-// ==========================================
-
-/**
- * API: 启动音频监控进程
- * 路径: /api/audio-watch/start
- * 方法: POST
- * 参数: pythonPath, watchPath, audioFormats
- */
-app.post('/api/audio-watch/start', async (req, res) => {
-  try {
-    // 检查是否已在运行
-    if (audioWatchProc && !audioWatchProc.killed) {
-      return res.json({ running: true, pid: audioWatchProc.pid });
-    }
-    
-    const { pythonPath = 'python', watchPath, audioFormats } = req.body || {};
-    const script = path.join(process.cwd(), 'audio_text.py');
-    
-    // 检查脚本是否存在
-    try {
-      await fs.access(script);
-    } catch {
-      return res.status(400).json({ error: 'audio_text.py not found' });
-    }
-    
-    // 如果提供了配置，更新配置文件
-    if (watchPath || audioFormats) {
-      try {
-        const p = path.join(process.cwd(), 'config.ini');
-        let text = '';
-        try { text = await fs.readFile(p, 'utf-8'); } catch {}
-        const ini = parseIni(text);
-        
-        // 更新Watch节
-        ini.Watch = ini.Watch || {};
-        if (watchPath) ini.Watch.WatchPath = watchPath;
-        if (audioFormats) ini.Watch.AudioFormats = audioFormats;
-        
-        // 重建INI内容
-        const lines = [];
-        lines.push('[TencentCloud]');
-        const auth = ini.TencentCloud || ini.auth || {};
-        lines.push(`SecretId=${auth.SecretId || ''}`);
-        lines.push(`SecretKey=${auth.SecretKey || ''}`);
-        lines.push(`Region=${auth.Region || (ini.asr && ini.asr.Region) || ''}`);
-        lines.push(`Bucket=${auth.Bucket || ''}`);
-        lines.push('');
-        lines.push('[asr]');
-        const asr = ini.asr || {};
-        lines.push(`EngineModelType=${asr.EngineModelType || '16k_zh'}`);
-        lines.push('');
-        lines.push('[Watch]');
-        const watch = ini.Watch || {};
-        lines.push(`WatchPath=${watch.WatchPath || './watch'}`);
-        lines.push(`AudioFormats=${watch.AudioFormats || '*.wav'}`);
-        
-        await fs.writeFile(p, lines.join('\n'), 'utf-8');
-      } catch {}
-    }
-    
-    // 启动Python子进程
-    audioWatchLog = [];
-    audioWatchProc = spawn(pythonPath, [script], { cwd: process.cwd(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
-    
-    // 监听标准输出
-    audioWatchProc.stdout.on('data', (d) => {
-      const s = d.toString();
-      audioWatchLog.push(...s.split(/\r?\n/).filter(Boolean));
-      if (audioWatchLog.length > 200) audioWatchLog = audioWatchLog.slice(-200); // 保留最近200条日志
-    });
-    
-    // 监听标准错误
-    audioWatchProc.stderr.on('data', (d) => {
-      const s = d.toString();
-      audioWatchLog.push(...s.split(/\r?\n/).filter(Boolean));
-      if (audioWatchLog.length > 200) audioWatchLog = audioWatchLog.slice(-200);
-    });
-    
-    // 监听退出事件
-    audioWatchProc.on('exit', () => {
-      audioWatchProc = null;
-    });
-    
-    res.json({ running: true, pid: audioWatchProc.pid });
-  } catch {
-    res.status(500).json({ error: 'start watch failed' });
-  }
-});
-
-/**
- * API: 停止音频监控进程
- * 路径: /api/audio-watch/stop
- * 方法: POST
- */
-app.post('/api/audio-watch/stop', async (req, res) => {
-  try {
-    if (audioWatchProc && !audioWatchProc.killed) {
-      try { audioWatchProc.kill(); } catch {}
-      audioWatchProc = null;
-    }
-    res.json({ running: false });
-  } catch {
-    res.status(500).json({ error: 'stop watch failed' });
-  }
-});
-
-/**
- * API: 获取音频监控状态和日志
- * 路径: /api/audio-watch/status
- * 方法: GET
- */
-app.get('/api/audio-watch/status', async (req, res) => {
-  res.json({ 
-    running: !!(audioWatchProc && !audioWatchProc.killed), 
-    pid: audioWatchProc ? audioWatchProc.pid : undefined, 
-    logs: audioWatchLog.slice(-50) // 返回最近50条日志
-  });
-});
-
-/**
- * API: 清除监控日志
- * 路径: /api/audio-watch/clear-logs
- * 方法: POST
- */
-app.post('/api/audio-watch/clear-logs', async (req, res) => {
-  audioWatchLog = [];
-  res.json({ ok: true });
-});
-
-/**
- * API: 获取ASR配置
- * 路径: /api/asr-config
- * 方法: GET
- */
-app.get('/api/asr-config', async (req, res) => {
-  try {
-    const cfg = await getASRConfig();
-    let ini = {};
-    try {
-      const p = path.join(process.cwd(), 'config.ini');
-      const s = await fs.readFile(p, 'utf-8');
-      ini = parseIni(s);
-    } catch {}
-    const watch = ini.watch || ini.Watch || {};
-    res.json({
-      secretId: cfg.SecretId,
-      secretKey: cfg.SecretKey,
-      region: cfg.Region,
-      bucket: cfg.Bucket,
-      engineModelType: cfg.EngineModelType,
-      watchPath: watch.WatchPath || '',
-      audioFormats: watch.AudioFormats || watch.AudioPattern || ''
-    });
-  } catch {
-    res.status(500).json({ error: 'read config failed' });
-  }
-});
-
-/**
- * API: 更新ASR配置
- * 路径: /api/asr-config
- * 方法: POST
- */
-app.post('/api/asr-config', async (req, res) => {
-  try {
-    const { secretId = '', secretKey = '', region = '', bucket = '', engineModelType = '16k_zh', watchPath = './watch', audioFormats = '*.wav' } = req.body || {};
-    
-    // 构造INI文件内容
-    const lines = [];
-    lines.push('[TencentCloud]');
-    lines.push(`SecretId=${secretId}`);
-    lines.push(`SecretKey=${secretKey}`);
-    lines.push(`Region=${region}`);
-    lines.push(`Bucket=${bucket}`);
-    lines.push('');
-    lines.push('[asr]');
-    lines.push(`EngineModelType=${engineModelType}`);
-    lines.push('');
-    lines.push('[Watch]');
-    lines.push(`WatchPath=${watchPath}`);
-    lines.push(`AudioFormats=${audioFormats}`);
-    
-    const content = lines.join('\n');
-    const p = path.join(process.cwd(), 'config.ini');
-    await fs.writeFile(p, content, 'utf-8');
-    
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ error: 'write config failed' });
-  }
-});
 
 // ==========================================
 // 历史记录与UP主合集 API

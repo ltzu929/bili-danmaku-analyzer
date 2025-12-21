@@ -28,6 +28,15 @@ function createWindow () {
       preload: path.join(__dirname, 'preload.js')
     }
   })
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      require('electron').shell.openExternal(url)
+      return { action: 'deny' }
+    }
+    return { action: 'allow' }
+  })
+
   const indexPath = path.join(__dirname, '../dist/index.html')
   win.loadFile(indexPath)
 }
