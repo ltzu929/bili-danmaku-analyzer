@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import SidebarLayout from './SidebarLayout';
 import DanmakuAnalysis from './DanmakuAnalysis';

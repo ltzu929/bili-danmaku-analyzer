@@ -2,14 +2,10 @@ import { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   User, 
-  Mic, 
   Settings, 
   Moon, 
   Sun,
-  Menu,
-  X,
-  ChevronLeft,
-  ChevronRight
+  ChevronLeft
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +63,7 @@ export default function SidebarLayout({ children, activeTab, onTabChange }: Side
       <div className={cn(
         "flex flex-col bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm transition-all duration-300 ease-in-out",
         "border-r border-gray-200 dark:border-gray-700",
-        sidebarOpen ? "w-64" : "w-12" // 折叠时更窄 - 从14px改为12px
+        sidebarOpen ? "w-64" : "w-12"
       )}>
         {/* 折叠控制区域 - 集成在侧边栏内部顶部 */}
         <div className={cn(
