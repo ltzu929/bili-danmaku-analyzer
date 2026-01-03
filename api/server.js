@@ -47,7 +47,7 @@ function isPortAvailable(port) {
       if (err.code === 'EADDRINUSE') {
         resolve(false);
       } else {
-        // 其他错误也视为不可用，为了安全起见
+        console.error(`Port ${port} check failed with error:`, err.code, err.message);
         resolve(false);
       }
     });
@@ -56,7 +56,8 @@ function isPortAvailable(port) {
         resolve(true);
       });
     });
-    server.listen(port);
+    // 明确绑定 127.0.0.1，避免监听 0.0.0.0 时的权限问题
+    server.listen(port, '127.0.0.1');
   });
 }
 
@@ -70,7 +71,7 @@ async function findAvailablePort(startPort) {
   while (!(await isPortAvailable(port))) {
     port++;
     if (port > startPort + 100) { // 防止无限循环，最多尝试100个端口
-      throw new Error('No available ports found');
+      throw new Error(`No available ports found between ${startPort} and ${port}`);
     }
   }
   return port;
@@ -79,17 +80,20 @@ async function findAvailablePort(startPort) {
 // 启动服务器函数
 async function startServer() {
   try {
-    const PORT = await findAvailablePort(3001); // 从3001开始寻找
-    // 注意：app.listen 默认是异步的，但没有返回 promise。
-    // 我们需要确保端口真正被监听后才返回，否则可能会导致竞争条件
+    // 尝试让系统自动分配可用端口（port = 0）
+    // 显式绑定 127.0.0.1，更安全且通常权限更宽松
     return new Promise((resolve, reject) => {
-      const server = app.listen(PORT, (err) => {
-        if (err) return reject(err);
-        console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
-        console.log(`API 地址: http://localhost:${PORT}/api`);
+      const server = app.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        const PORT = address.port;
+        console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT} (127.0.0.1)`);
+        console.log(`API 地址: http://127.0.0.1:${PORT}/api`);
         resolve(PORT);
       });
-      server.on('error', reject);
+      server.on('error', (err) => {
+        console.error('Server listen error:', err);
+        reject(err);
+      });
     });
   } catch (err) {
     console.error('Failed to start server:', err);
