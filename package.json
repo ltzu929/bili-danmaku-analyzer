@@ -13,7 +13,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit",
-    "electron:dev": "concurrently \"npm run server\" \"vite\" \"electron .\"",
+    "electron:dev": "concurrently \"vite\" \"electron .\"",
     "electron:build": "vite build && electron-builder -w portable",
     "release:patch": "npm version patch -m \"chore: release %s\"",
     "release:minor": "npm version minor -m \"chore: release %s\"",

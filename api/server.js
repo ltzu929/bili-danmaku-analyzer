@@ -80,11 +80,17 @@ async function findAvailablePort(startPort) {
 async function startServer() {
   try {
     const PORT = await findAvailablePort(3001); // 从3001开始寻找
-    app.listen(PORT, () => {
-      console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
-      console.log(`API 地址: http://localhost:${PORT}/api`);
+    // 注意：app.listen 默认是异步的，但没有返回 promise。
+    // 我们需要确保端口真正被监听后才返回，否则可能会导致竞争条件
+    return new Promise((resolve, reject) => {
+      const server = app.listen(PORT, (err) => {
+        if (err) return reject(err);
+        console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
+        console.log(`API 地址: http://localhost:${PORT}/api`);
+        resolve(PORT);
+      });
+      server.on('error', reject);
     });
-    return PORT;
   } catch (err) {
     console.error('Failed to start server:', err);
     process.exit(1);
