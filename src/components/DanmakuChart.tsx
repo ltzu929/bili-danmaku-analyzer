@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -11,6 +9,13 @@ import {
   Area
 } from 'recharts';
 import { BarChart3 } from 'lucide-react';
+
+interface DanmakuItem {
+  time?: number;
+  timePoint?: number;
+  content?: string;
+  text?: string;
+}
 
 interface ChartData {
   startTime: number;
@@ -36,7 +41,7 @@ interface ChartOptions {
 interface DanmakuChartProps {
   data: ChartData[];
   options: ChartOptions;
-  danmakus?: any[];
+  danmakus?: DanmakuItem[];
 }
 
 /**
@@ -78,7 +83,7 @@ const normalizeContent = (text: string): string => {
   let s = (text || '').trim();
   if (!s) return '';
   s = s.replace(/\?/g, '？').replace(/!/g, '！').toLowerCase();
-  s = s.replace(/[？！？、，。\.\-~～]{2,}/gu, (m) => m[0]);
+  s = s.replace(/[？！？、，。.\-~～]{2,}/gu, (m) => m[0]);
   s = s.replace(/(.)\1{2,}/gu, '$1$1');
   if (/^[？]+$/u.test(s)) return '？';
   if (/^[！]+$/u.test(s)) return '！';
@@ -93,7 +98,7 @@ const normalizeContent = (text: string): string => {
 /**
  * 计算指定时间段内某类弹幕的数量
  */
-const segmentCategoryCount = (danmakus: any[], start: number, end: number, mode: FilterMode): number => {
+const segmentCategoryCount = (danmakus: DanmakuItem[], start: number, end: number, mode: FilterMode): number => {
   if (mode === 'all') return 0;
   let cnt = 0;
   for (const d of danmakus || []) {
@@ -118,7 +123,14 @@ const segmentCategoryCount = (danmakus: any[], start: number, end: number, mode:
 /**
  * 自定义Tooltip组件
  */
-const CustomTooltip = ({ active, payload, label, danmakus }: any) => {
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: { payload: ChartData }[];
+  label?: string;
+  danmakus: DanmakuItem[];
+}
+
+const CustomTooltip = ({ active, payload, danmakus }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     // 读取设置
@@ -133,17 +145,19 @@ const CustomTooltip = ({ active, payload, label, danmakus }: any) => {
         if (typeof s.tooltipWindowSeconds === 'number') timeWindow = s.tooltipWindowSeconds;
         if (typeof s.mergeSimilar === 'boolean') mergeSimilar = s.mergeSimilar;
       }
-    } catch {}
+    } catch {
+      // ignore error
+    }
     const currentTime = data.startTime + 30;
     
-    const nearbyDanmakus = danmakus.filter((d: any) => {
+    const nearbyDanmakus = danmakus.filter((d: DanmakuItem) => {
       const danmakuTime = d.time || d.timePoint || 0;
       return Math.abs(danmakuTime - currentTime) <= timeWindow;
     });
 
     // 统计相同内容的弹幕数量
     const contentCount: { [key: string]: number } = {};
-    nearbyDanmakus.forEach((d: any) => {
+    nearbyDanmakus.forEach((d: DanmakuItem) => {
       const raw = d.content || d.text || '';
       const content = mergeSimilar ? normalizeContent(raw) : (raw || '').trim();
       if (content.length > 0) {
@@ -230,7 +244,7 @@ export default function DanmakuChart({ data, options, danmakus }: DanmakuChartPr
     if (!options.smoothLine || data.length < 3) return data;
 
     const smoothed = [...data];
-    const windowSize = 3;
+    // const windowSize = 3;
 
     for (let i = 1; i < data.length - 1; i++) {
       let sum = 0;

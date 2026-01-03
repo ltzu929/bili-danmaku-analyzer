@@ -32,7 +32,6 @@ Thumbs.db
 ehthumbs.db
 builder-debug.yml
 builder-effective-config.yaml
-.trae/
 __pycache__/
 *.pyc
 .venv/

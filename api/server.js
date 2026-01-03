@@ -8,6 +8,7 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import net from 'net'; // 引入 net 模块
 
 // ==========================================
 // 配置与常量定义
@@ -25,11 +26,79 @@ const CONFIG_FILE_PATH = path.join(USER_DATA_DIR, 'config.ini');
 
 // 初始化Express应用
 const app = express();
-const PORT = 3001;
+// 移除硬编码的 PORT
+// const PORT = 3001; 
 
-// 中间件配置
-app.use(cors()); // 允许跨域请求
-app.use(express.json()); // 解析JSON请求体
+// ... (省略中间代码)
+
+// ==========================================
+// 端口检测与服务器启动逻辑
+// ==========================================
+
+/**
+ * 检查端口是否可用
+ * @param {number} port 
+ * @returns {Promise<boolean>}
+ */
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        // 其他错误也视为不可用，为了安全起见
+        resolve(false);
+      }
+    });
+    server.once('listening', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+    server.listen(port);
+  });
+}
+
+/**
+ * 寻找可用端口
+ * @param {number} startPort 
+ * @returns {Promise<number>}
+ */
+async function findAvailablePort(startPort) {
+  let port = startPort;
+  while (!(await isPortAvailable(port))) {
+    port++;
+    if (port > startPort + 100) { // 防止无限循环，最多尝试100个端口
+      throw new Error('No available ports found');
+    }
+  }
+  return port;
+}
+
+// 启动服务器函数
+async function startServer() {
+  try {
+    const PORT = await findAvailablePort(3001); // 从3001开始寻找
+    app.listen(PORT, () => {
+      console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
+      console.log(`API 地址: http://localhost:${PORT}/api`);
+    });
+    return PORT;
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+// 只有当文件被直接执行时才自动启动
+// 注意：electron/main.cjs 使用 import() 导入此文件，也会触发执行。
+// 为了让 main.cjs 能获取端口，我们将启动逻辑导出，并立即执行（保存结果）。
+
+const serverPromise = startServer();
+
+export { app, serverPromise };
+export default app;
 
 // ==========================================
 // 内存数据存储
@@ -1200,9 +1269,10 @@ app.get('/api/test-interval/:roomId/:date', async (req, res) => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
-  console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
-  console.log(`API 地址: http://localhost:${PORT}/api`);
-});
+// app.listen(PORT, () => {
+//   console.log(`B站直播回放弹幕分析服务器运行在端口 ${PORT}`);
+//   console.log(`API 地址: http://localhost:${PORT}/api`);
+// });
 
-export default app;
+// export default app;
+

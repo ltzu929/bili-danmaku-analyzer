@@ -4,11 +4,18 @@ const { pathToFileURL } = require('url')
 let autoUpdater
 try { ({ autoUpdater } = require('electron-updater')) } catch {}
 
+let apiPort = 3001; // 默认端口
+
 (async () => {
   try {
     const url = pathToFileURL(path.join(__dirname, '../api/server.js')).href
-    await import(url)
-    console.log('backend started')
+    const serverModule = await import(url)
+    console.log('backend module loaded')
+    // 获取实际启动的端口
+    if (serverModule.serverPromise) {
+      apiPort = await serverModule.serverPromise;
+      console.log(`Backend started on port: ${apiPort}`);
+    }
   } catch (e) {
     console.error('backend start failed', e && e.message)
   }
@@ -25,7 +32,7 @@ function createWindow () {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
     }
   })
 
@@ -40,6 +47,11 @@ function createWindow () {
   const indexPath = path.join(__dirname, '../dist/index.html')
   win.loadFile(indexPath)
 }
+
+// 处理获取端口的请求
+ipcMain.handle('get-api-port', () => {
+  return apiPort;
+});
 
 app.whenReady().then(() => {
   createWindow()
