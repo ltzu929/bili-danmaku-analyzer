@@ -11,13 +11,19 @@ let apiPort = 3001; // 默认端口
     const url = pathToFileURL(path.join(__dirname, '../api/server.js')).href
     const serverModule = await import(url)
     console.log('backend module loaded')
+    
+    // 调试日志：查看导出内容
+    console.log('Server Module Exports:', Object.keys(serverModule));
+
     // 获取实际启动的端口
     if (serverModule.serverPromise) {
       apiPort = await serverModule.serverPromise;
       console.log(`Backend started on port: ${apiPort}`);
+    } else {
+      console.error('serverPromise not found in server module exports');
     }
   } catch (e) {
-    console.error('backend start failed', e && e.message)
+    console.error('backend start failed', e)
   }
 })()
 
@@ -28,11 +34,16 @@ function sendToAll(channel, payload) {
 }
 
 function createWindow () {
+  const preloadPath = path.join(__dirname, 'preload.js');
+  console.log('Preload script path:', preloadPath); // 打印 preload 路径，验证是否正确
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: preloadPath,
+      contextIsolation: true, // 确保开启
+      nodeIntegration: false, // 确保关闭
     }
   })
 
@@ -44,8 +55,19 @@ function createWindow () {
     return { action: 'allow' }
   })
 
-  const indexPath = path.join(__dirname, '../dist/index.html')
-  win.loadFile(indexPath)
+  // 在开发环境下，加载 Vite 开发服务器地址
+  // 在生产环境下，加载 dist/index.html
+  // 注意：process.env.VITE_DEV_SERVER_URL 通常由 electron-vite 等插件注入，如果只是 concurrently 运行，可能需要手动判断
+  // 这里我们简单判断是否是开发环境（app.isPackaged 为 false）
+  if (!app.isPackaged) {
+    // 尝试连接 Vite 默认端口，或者从环境变量获取
+    const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    console.log('Loading URL:', devUrl);
+    win.loadURL(devUrl).catch(e => console.error('Failed to load dev URL:', e));
+  } else {
+    const indexPath = path.join(__dirname, '../dist/index.html')
+    win.loadFile(indexPath)
+  }
 }
 
 // 处理获取端口的请求

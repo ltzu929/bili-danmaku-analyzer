@@ -8,12 +8,14 @@ const initApiBase = () => {
 
   initPromise = (async () => {
     try {
+      console.log('Checking for serverConfig...', window.serverConfig);
       // 优先尝试从 Electron 上下文获取动态端口
-      if ((window as any).serverConfig?.getPort) {
+      if (window.serverConfig?.getPort) {
         // 增加重试机制，确保主进程已就绪
         let port;
-        for (let i = 0; i < 5; i++) {
-          port = await (window as any).serverConfig.getPort();
+        for (let i = 0; i < 10; i++) { // 增加重试次数
+          port = await window.serverConfig.getPort();
+          console.log(`Attempt ${i + 1}: Got port`, port);
           if (port) break;
           await new Promise(r => setTimeout(r, 500)); // 等待 500ms 重试
         }
@@ -22,14 +24,19 @@ const initApiBase = () => {
           dynamicApiBase = `http://127.0.0.1:${port}`;
           console.log('API Base initialized:', dynamicApiBase);
           return;
+        } else {
+          console.error('Failed to get port from serverConfig after retries');
         }
+      } else {
+        console.warn('window.serverConfig is missing. Are you in Electron?');
       }
     } catch (e) {
       console.warn('Failed to get dynamic API port, falling back to default.', e);
     }
     
     // 回退到默认值
-    dynamicApiBase = (window as any).API_BASE || 'http://127.0.0.1:3001';
+    dynamicApiBase = window.API_BASE || 'http://127.0.0.1:3001';
+    console.log('Fallback to API base:', dynamicApiBase);
   })();
 
   return initPromise;
@@ -39,7 +46,7 @@ const initApiBase = () => {
 initApiBase();
 
 export const apiUrl = (p: string) => {
-  const base = dynamicApiBase || (window as any).API_BASE || 'http://127.0.0.1:3001';
+  const base = dynamicApiBase || window.API_BASE || 'http://127.0.0.1:3001';
   return `${base}${p}`;
 };
 

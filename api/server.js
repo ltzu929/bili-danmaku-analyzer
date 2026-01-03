@@ -26,6 +26,11 @@ const CONFIG_FILE_PATH = path.join(USER_DATA_DIR, 'config.ini');
 
 // 初始化Express应用
 const app = express();
+
+// 启用 CORS 和 JSON 解析
+app.use(cors());
+app.use(express.json());
+
 // 移除硬编码的 PORT
 // const PORT = 3001; 
 

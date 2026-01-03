@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Calendar, Eye, Trash2 } from 'lucide-react';
+import { Loader2, Calendar, Eye } from 'lucide-react';
 
 interface Video {
   title: string;
@@ -22,18 +22,29 @@ interface UPVideosProps {
   initialSeriesUrl?: string;
 }
 
+interface CacheData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  list: any[];
+  hasMore?: boolean;
+  upName?: string;
+  upFace?: string;
+}
+
 export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosProps) {
   const [seriesUrl, setSeriesUrl] = useState(initialSeriesUrl || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [videos, setVideos] = useState<Video[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [pageSize, setPageSize] = useState<number>(10);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [noMore, setNoMore] = useState<boolean>(false);
   const [history, setHistory] = useState<Array<{ time: number; upName: string; upFace?: string; url: string }>>([]);
-  const cache = useMemo(() => new Map<string, any>(), []);
+  const cache = useMemo(() => new Map<string, CacheData>(), []);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -53,7 +64,9 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
         }
         setHistory(Array.from(map.values()).sort((a,b) => b.time - a.time));
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -73,7 +86,9 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
     }
     const next = Array.from(map.values()).sort((a,b) => b.time - a.time).slice(0, 50);
     setHistory(next);
-    try { localStorage.setItem('up_series_history', JSON.stringify(next)); } catch {}
+    try { localStorage.setItem('up_series_history', JSON.stringify(next)); } catch {
+        // ignore
+    }
     apiFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) }).catch(() => {});
   };
 
@@ -90,25 +105,32 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
     await handleSearch(seriesUrl, true);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const deleteHistory = (url: string) => {
     const next = history.filter(h => h.url !== url);
     setHistory(next);
-    (window as any).electronStore.setHistory(next.reduce((acc: any, cur: any) => ({ ...acc, [cur.url]: cur }), {}));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.electronStore?.setHistory(next.reduce((acc: any, cur: any) => ({ ...acc, [cur.url]: cur }), {}));
   };
 
   const clearHistory = () => {
     setHistory([]);
-    try { localStorage.removeItem('up_series_history'); } catch {}
+    try { localStorage.removeItem('up_series_history'); } catch {
+        // ignore
+    }
     apiFetch('/api/history', { method: 'DELETE' }).catch(() => {});
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const onDrop = (targetIndex: number) => {
     if (dragIndex === null || dragIndex === targetIndex) return;
     const arr = [...history];
     const [item] = arr.splice(dragIndex, 1);
     arr.splice(targetIndex, 0, item);
     setHistory(arr);
-    try { localStorage.setItem('up_series_history', JSON.stringify(arr)); } catch {}
+    try { localStorage.setItem('up_series_history', JSON.stringify(arr)); } catch {
+        // ignore
+    }
     setDragIndex(null);
   };
 
@@ -133,8 +155,9 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
       const key = `${url}::1::${pageSize}`;
       if (!force && cache.has(key)) {
         const data = cache.get(key);
-        const listArr = Array.isArray(data.list) ? data.list : [];
+        const listArr = Array.isArray(data?.list) ? data?.list : [];
         const firstSlice = listArr.slice(0, pageSize);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setVideos(firstSlice.map((v: any) => ({
           title: v.title,
           cover: v.cover,
@@ -144,8 +167,8 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
           url: v.url,
           bvid: v.bvid,
         })));
-        setHasMore(Boolean(data.hasMore) || listArr.length > firstSlice.length);
-        saveHistory(data.upName || '', data.upFace || '', url);
+        setHasMore(Boolean(data?.hasMore) || listArr.length > firstSlice.length);
+        saveHistory(data?.upName || '', data?.upFace || '', url);
         return;
       }
 
@@ -161,6 +184,7 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
       saveHistory(data.upName || '', data.upFace || '', url);
       const listArr = Array.isArray(data.list) ? data.list : [];
       const firstSlice = listArr.slice(0, pageSize);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setVideos(firstSlice.map((v: any) => ({
         title: v.title,
         cover: v.cover,
@@ -200,6 +224,7 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
         cache.set(key, data);
       }
       const listArr = Array.isArray(data.list) ? data.list : [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const append = listArr.map((v: any) => ({
         title: v.title,
         cover: v.cover,
@@ -209,7 +234,7 @@ export default function UPVideos({ onVideoSelect, initialSeriesUrl }: UPVideosPr
         url: v.url,
         bvid: v.bvid,
       }));
-      const dedup = append.filter(item => !videos.some(prev => prev.bvid === item.bvid));
+      const dedup = append.filter((item: Video) => !videos.some(prev => prev.bvid === item.bvid));
       if (dedup.length === 0) {
         setNoMore(true);
       } else {
