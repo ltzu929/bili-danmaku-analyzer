@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiUrl } from '@/lib/api';
 import { ArrowLeft, Download, ExternalLink, User } from 'lucide-react';
 import DanmakuChart from '../components/DanmakuChart';
+import DanmakuHighEnergyList from '../components/DanmakuHighEnergyList';
 import KeywordSearch from '../components/KeywordSearch';
 
 interface DanmakuData {
@@ -28,6 +29,7 @@ interface VideoAnalysisPageProps {
 }
 
 export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisPageProps) {
+  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
   const [chartOptions, setChartOptions] = useState({
     showAll: true,
     showPeakOnly: false,
@@ -117,6 +119,21 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
       console.error('Failed to download cover:', e);
     }
   };
+
+  const handleJumpToTime = useCallback((seconds: number) => {
+    if (!data.url) return;
+    
+    let jumpUrl = data.url;
+    try {
+      const urlObj = new URL(jumpUrl);
+      urlObj.searchParams.set('t', Math.floor(seconds).toString());
+      jumpUrl = urlObj.toString();
+    } catch {
+       const separator = jumpUrl.includes('?') ? '&' : '?';
+       jumpUrl = `${jumpUrl}${separator}t=${Math.floor(seconds)}`;
+    }
+    window.open(jumpUrl, '_blank');
+  }, [data.url]);
 
   if (!data) {
     return (
@@ -267,6 +284,13 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
                 data={data.stats} 
                 options={chartOptions}
                 danmakus={data.danmakus}
+                onTimeSelect={handleJumpToTime}
+                highlightTime={hoveredTime}
+              />
+              <DanmakuHighEnergyList 
+                danmakus={data.danmakus} 
+                onTimeSelect={handleJumpToTime}
+                onHover={setHoveredTime}
               />
             </div>
           </div>

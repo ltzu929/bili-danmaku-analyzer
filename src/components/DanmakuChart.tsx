@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   XAxis,
   YAxis,
@@ -6,7 +6,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   AreaChart,
-  Area
+  Area,
+  ReferenceLine,
+  Label
 } from 'recharts';
 import { BarChart3 } from 'lucide-react';
 
@@ -42,6 +44,8 @@ interface DanmakuChartProps {
   data: ChartData[];
   options: ChartOptions;
   danmakus?: DanmakuItem[];
+  onTimeSelect?: (time: number) => void;
+  highlightTime?: number | null;
 }
 
 /**
@@ -219,11 +223,11 @@ const CustomTooltip = ({ active, payload, danmakus }: CustomTooltipProps) => {
   return null;
 };
 
-export default function DanmakuChart({ data, options, danmakus }: DanmakuChartProps) {
+export default function DanmakuChart({ data, options, danmakus, onTimeSelect, highlightTime }: DanmakuChartProps) {
   // 根据选项过滤数据
-  const getFilteredData = () => {
+  const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
-
+    
     let filteredData = [...data];
 
     // 如果只显示高峰
@@ -231,58 +235,46 @@ export default function DanmakuChart({ data, options, danmakus }: DanmakuChartPr
       filteredData = filteredData.filter(item => item.peak);
     }
 
-    
     if (options.showWithEmoji) {
       filteredData = filteredData.filter(item => item.withEmoji > 0);
     }
+    
+    // 平滑数据（移动平均）
+    if (!options.smoothLine || filteredData.length < 3) return filteredData;
 
-    return filteredData;
-  };
-
-  // 平滑数据（移动平均）
-  const getSmoothedData = (data: ChartData[]) => {
-    if (!options.smoothLine || data.length < 3) return data;
-
-    const smoothed = [...data];
-    // const windowSize = 3;
-
-    for (let i = 1; i < data.length - 1; i++) {
+    const smoothed = [...filteredData];
+    for (let i = 1; i < filteredData.length - 1; i++) {
       let sum = 0;
       let count = 0;
-
       for (let j = -1; j <= 1; j++) {
-        if (i + j >= 0 && i + j < data.length) {
-          sum += data[i + j].count;
+        if (i + j >= 0 && i + j < filteredData.length) {
+          sum += filteredData[i + j].count;
           count++;
         }
       }
-
       smoothed[i] = {
         ...smoothed[i],
         count: Math.round(sum / count)
       };
     }
-
+    
     return smoothed;
-  };
+  }, [data, options.showPeakOnly, options.showWithEmoji, options.smoothLine]);
 
-  const chartData = getSmoothedData(getFilteredData());
-
-  // 分类过滤：仅显示指定类别密度（将count替换为该类别计数，并过滤掉为0的段）
-  const applyCategoryFilter = (data: ChartData[]): ChartData[] => {
-    if (!danmakus || !danmakus.length) return data;
-    if (!options.filterMode || options.filterMode === 'all') return data;
+  // 分类过滤：仅显示指定类别密度
+  const finalData = useMemo(() => {
+    if (!danmakus || !danmakus.length) return chartData;
+    if (!options.filterMode || options.filterMode === 'all') return chartData;
+    
     const next: ChartData[] = [];
-    for (const item of data) {
+    for (const item of chartData) {
       const c = segmentCategoryCount(danmakus, item.startTime, item.endTime, options.filterMode);
       if (c > 0) {
         next.push({ ...item, count: c });
       }
     }
-    return next.length ? next : data;
-  };
-
-  const finalData = applyCategoryFilter(chartData);
+    return next.length ? next : chartData;
+  }, [chartData, danmakus, options.filterMode]);
 
   if (finalData.length === 0) {
     return (
@@ -300,7 +292,15 @@ export default function DanmakuChart({ data, options, danmakus }: DanmakuChartPr
       {/* 主图表 - 更现代的设计 */}
       <div className="h-72 mb-3">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={finalData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+          <AreaChart 
+            data={finalData} 
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            onClick={(e) => {
+              if (e && e.activeLabel && onTimeSelect) {
+                onTimeSelect(Number(e.activeLabel));
+              }
+            }}
+          >
             <defs>
               <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
@@ -331,6 +331,11 @@ export default function DanmakuChart({ data, options, danmakus }: DanmakuChartPr
               content={<CustomTooltip danmakus={danmakus || []} />} 
               cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '4 4' }}
             />
+            {typeof highlightTime === 'number' && (
+              <ReferenceLine x={highlightTime} stroke="#ef4444" strokeDasharray="3 3" isFront>
+                <Label value={formatTime(highlightTime)} position="top" fill="#ef4444" fontSize={12} />
+              </ReferenceLine>
+            )}
             <Area
               type={options.smoothLine ? "monotone" : "linear"}
               dataKey="count"
@@ -339,6 +344,7 @@ export default function DanmakuChart({ data, options, danmakus }: DanmakuChartPr
               fill="url(#colorCount)"
               dot={false}
               activeDot={false}
+              isAnimationActive={false}
             />
           </AreaChart>
         </ResponsiveContainer>
