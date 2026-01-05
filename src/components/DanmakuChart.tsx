@@ -320,6 +320,8 @@ export default function DanmakuChart({ data, options, danmakus, onTimeSelect, hi
               tickLine={false}
               axisLine={false}
               ticks={generateTicks(chartData)}
+              type="number"
+              domain={['dataMin', 'dataMax']}
             />
             <YAxis 
               stroke="#6b7280" 
