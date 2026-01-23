@@ -30,7 +30,7 @@ interface VideoAnalysisPageProps {
 
 export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisPageProps) {
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
-  const [chartOptions, setChartOptions] = useState({
+  const [chartOptions] = useState({
     showAll: true,
     showPeakOnly: false,
     showWithEmoji: false,
@@ -38,6 +38,20 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
     smoothLine: true,
     filterMode: 'all' as 'all' | 'call' | 'ha' | 'cao' | 'question'
   });
+
+  const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('app_settings');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.highEnergySensitivity) {
+          setSensitivity(s.highEnergySensitivity);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // 封面兜底：如果后端返回的分析数据没有封面，则按BV号再拉一次封面
   const [cover, setCover] = useState<string>(data.cover || '');
@@ -274,10 +288,11 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
                 onTimeSelect={handleJumpToTime}
                 highlightTime={hoveredTime}
               />
-              <DanmakuHighEnergyList 
-                danmakus={data.danmakus} 
+              <DanmakuHighEnergyList
+                danmakus={data.danmakus}
                 onTimeSelect={handleJumpToTime}
                 onHover={setHoveredTime}
+                sensitivity={sensitivity}
               />
             </div>
           </div>
@@ -285,30 +300,6 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
           
         </div>
 
-        <div className="mb-2">
-          <div className="space-y-1 text-xs text-gray-700">
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" name="filterMode" checked={chartOptions.filterMode==='all'} onChange={() => setChartOptions({ ...chartOptions, filterMode: 'all' })} />
-              <span>显示全部</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" name="filterMode" checked={chartOptions.filterMode==='call'} onChange={() => setChartOptions({ ...chartOptions, filterMode: 'call' })} />
-              <span>仅显示打call密度（定位歌）</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" name="filterMode" checked={chartOptions.filterMode==='ha'} onChange={() => setChartOptions({ ...chartOptions, filterMode: 'ha' })} />
-              <span>仅显示哈哈密度</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" name="filterMode" checked={chartOptions.filterMode==='cao'} onChange={() => setChartOptions({ ...chartOptions, filterMode: 'cao' })} />
-              <span>仅显示草密度</span>
-            </label>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="radio" name="filterMode" checked={chartOptions.filterMode==='question'} onChange={() => setChartOptions({ ...chartOptions, filterMode: 'question' })} />
-              <span>仅显示？密度</span>
-            </label>
-          </div>
-        </div>
         {/* 热词搜索 */}
         <div className="mt-4">
           <KeywordSearch 

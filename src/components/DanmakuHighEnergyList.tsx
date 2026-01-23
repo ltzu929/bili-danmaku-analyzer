@@ -19,6 +19,7 @@ interface DanmakuHighEnergyListProps {
   duration?: number; // 视频总时长（秒），可选，用于边界检查
   onTimeSelect: (time: number) => void;
   onHover?: (time: number | null) => void;
+  sensitivity?: 'low' | 'medium' | 'high';
 }
 
 // 格式化时间辅助函数
@@ -50,7 +51,7 @@ const normalizeContent = (text: string): string => {
   return s;
 };
 
-export default function DanmakuHighEnergyList({ danmakus, onTimeSelect, onHover }: DanmakuHighEnergyListProps) {
+export default function DanmakuHighEnergyList({ danmakus, onTimeSelect, onHover, sensitivity = 'medium' }: DanmakuHighEnergyListProps) {
   
   // 核心算法：计算高能时刻 + 热门内容
   const highEnergyPoints = useMemo(() => {
@@ -107,7 +108,10 @@ export default function DanmakuHighEnergyList({ danmakus, onTimeSelect, onHover 
     // 3. 动态阈值过滤
     const totalCount = times.length;
     const avgDensity = (totalCount / totalDuration) * windowSize;
-    const threshold = avgDensity * 2;
+    
+    // 根据灵敏度设置阈值倍数
+    const thresholdMultiplier = sensitivity === 'high' ? 1.4 : sensitivity === 'low' ? 2.2 : 1.8;
+    const threshold = avgDensity * thresholdMultiplier;
 
     const candidates = densities.filter(p => p.score >= threshold);
 
@@ -115,7 +119,16 @@ export default function DanmakuHighEnergyList({ danmakus, onTimeSelect, onHover 
     candidates.sort((a, b) => b.score - a.score);
 
     const result: HighEnergyPoint[] = [];
-    const suppressionRadius = 60; // 60秒抑制半径
+    // 根据灵敏度调整抑制半径
+    // Low=300s(5m), Medium=180s(3m), High=90s(1.5m)
+    const suppressionRadius = sensitivity === 'high' ? 90 : sensitivity === 'low' ? 300 : 180;
+
+    // 根据灵敏度和视频时长动态计算最大显示数量
+    // 每15分钟允许1个高能时刻，最少5个
+    const baseMax = Math.max(5, Math.ceil(totalDuration / 900));
+    // 上限根据灵敏度调整：Low=8, Medium=15, High=25
+    const maxCap = sensitivity === 'high' ? 25 : sensitivity === 'low' ? 8 : 15;
+    const maxPoints = Math.min(maxCap, baseMax);
 
     for (const candidate of candidates) {
       const isSuppressed = result.some(
@@ -158,12 +171,12 @@ export default function DanmakuHighEnergyList({ danmakus, onTimeSelect, onHover 
         result.push({ ...candidate, preview: topContent });
       }
 
-      if (result.length >= 5) break;
+      if (result.length >= maxPoints) break;
     }
 
     return result.sort((a, b) => a.time - b.time);
 
-  }, [danmakus]);
+  }, [danmakus, sensitivity]);
 
   if (highEnergyPoints.length === 0) {
     return null;

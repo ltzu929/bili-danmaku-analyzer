@@ -13,10 +13,17 @@ type AppSettings = {
   tooltipWindowSeconds?: number
   mergeSimilar?: boolean
   coverDownloadPath?: string
+  highEnergySensitivity?: 'low' | 'medium' | 'high'
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<AppSettings>({ topHotwords: 5, tooltipWindowSeconds: 30, mergeSimilar: true, coverDownloadPath: '' })
+  const [settings, setSettings] = useState<AppSettings>({
+    topHotwords: 5,
+    tooltipWindowSeconds: 30,
+    mergeSimilar: true,
+    coverDownloadPath: '',
+    highEnergySensitivity: 'medium'
+  })
   const [saving, setSaving] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [updateState, setUpdateState] = useState<string>('')
@@ -28,7 +35,13 @@ export default function SettingsPage() {
       const raw = localStorage.getItem('app_settings')
       if (raw) {
         const s = JSON.parse(raw)
-        setSettings({ topHotwords: s.topHotwords ?? 5, tooltipWindowSeconds: s.tooltipWindowSeconds ?? 30, mergeSimilar: s.mergeSimilar ?? true, coverDownloadPath: s.coverDownloadPath ?? '' })
+        setSettings({
+          topHotwords: s.topHotwords ?? 5,
+          tooltipWindowSeconds: s.tooltipWindowSeconds ?? 30,
+          mergeSimilar: s.mergeSimilar ?? true,
+          coverDownloadPath: s.coverDownloadPath ?? '',
+          highEnergySensitivity: s.highEnergySensitivity ?? 'medium'
+        })
       }
     } catch { /* ignore */ }
     (async () => {
@@ -56,7 +69,13 @@ export default function SettingsPage() {
   }
 
   const resetSettings = () => {
-    const defaults: AppSettings = { topHotwords: 5, tooltipWindowSeconds: 30, mergeSimilar: true, coverDownloadPath: defaultDownloads || '' }
+    const defaults: AppSettings = {
+      topHotwords: 5,
+      tooltipWindowSeconds: 30,
+      mergeSimilar: true,
+      coverDownloadPath: defaultDownloads || '',
+      highEnergySensitivity: 'medium'
+    }
     setSettings(defaults)
     localStorage.setItem('app_settings', JSON.stringify(defaults))
   }
@@ -97,6 +116,20 @@ export default function SettingsPage() {
               <Label htmlFor="tooltipWindowSeconds">悬浮窗时间窗口（秒）</Label>
               <Input id="tooltipWindowSeconds" type="number" min={5} max={120} value={settings.tooltipWindowSeconds ?? 30} onChange={(e) => setSettings({ ...settings, tooltipWindowSeconds: Number(e.target.value) })} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="highEnergySensitivity">高能时刻识别灵敏度</Label>
+              <select
+                id="highEnergySensitivity"
+                value={settings.highEnergySensitivity ?? 'medium'}
+                onChange={(e) => setSettings({ ...settings, highEnergySensitivity: e.target.value as any })}
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="low">低 (仅识别极高热度)</option>
+                <option value="medium">中 (标准模式)</option>
+                <option value="high">高 (识别更多波峰)</option>
+              </select>
+            </div>
+
             <div className="space-y-2 md:col-span-2">
               <Label>合并相似弹幕</Label>
               <div className="flex items-center gap-3">

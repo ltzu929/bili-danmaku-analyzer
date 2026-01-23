@@ -22,10 +22,10 @@ const HISTORY_FILENAME = 'up_history.json';
 
 /**
  * 获取用户数据目录
- * 优先使用 Electron 的 userData 路径
+ * 使用用户主目录下的 .bili-danmaku-analyzer-data (保持与旧版本兼容)
  */
 function getUserDataDir() {
-  return app.getPath('userData');
+  return path.join(os.homedir(), '.bili-danmaku-analyzer-data');
 }
 
 /**
@@ -496,7 +496,7 @@ function setupIPC() {
     return { ok: true };
   });
 
-  // 8. UP主合集
+  // 8. UP主合集 (带完整Fallback逻辑)
   ipcMain.handle('get-up-series', async (event, { url, page, pageSize, excludeBvids }) => {
     if (!url) throw new Error('缺少合集链接');
     
@@ -518,7 +518,7 @@ function setupIPC() {
     let hasMore = false;
     const exclude = new Set((excludeBvids || []).map(String));
     
-    // 简化版：仅保留API调用方式，省略爬虫 fallback 以精简代码 (API 通常够用)
+    // 1. 尝试API调用
     try {
       const apiUrl = `https://api.bilibili.com/x/series/archives?mid=${mid}&series_id=${sid}&only_normal=true&sort=desc&pn=${pn}&ps=${ps}`;
       const resp = await axios.get(apiUrl, { 
@@ -529,12 +529,50 @@ function setupIPC() {
         totalCount = resp.data.data.page?.total || 0;
       }
     } catch (e) {
-      console.error('API fetch failed', e);
+      console.error('API fetch failed, trying fallback', e.message);
     }
     
-    // 这里简单处理，暂不包含复杂的爬虫fallback逻辑
+    // 2. 尝试爬取HTML页面（备用方案）
+    if (!archives || archives.length < ps) {
+      try {
+        const pageUrl = `https://space.bilibili.com/${mid}/lists/${sid}?type=series`;
+        const htmlResp = await axios.get(pageUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const html = htmlResp.data || '';
+        const items = [];
+        // 正则匹配视频链接
+        const regex = /<a\s+href="\/video\/([A-Za-z0-9]+)"[\s\S]*?title="([^"]+)"[\s\S]*?data-src="(https?:\/\/[^"]+)"/g;
+        let m;
+        while ((m = regex.exec(html))) {
+          items.push({ bvid: m[1], title: m[2], pic: m[3] });
+        }
+        
+        if (items.length > 0) {
+            totalCount = Math.max(totalCount, items.length);
+            const filtered = items.filter(it => !exclude.has(String(it.bvid)));
+            const offset = exclude.size; 
+            // 如果是爬虫数据，分页比较困难，这里简化处理：假设爬取的是第一页
+            // 实际上爬虫通常只能获取第一页DOM渲染的数据
+            const slice = filtered.slice(0, ps);
+            // 补充缺失字段
+            if (archives.length === 0) {
+                archives = slice.map(it => ({ 
+                    bvid: it.bvid, 
+                    title: it.title, 
+                    pic: it.pic, 
+                    stat: { view: 0 }, 
+                    pubdate: Math.floor(Date.now()/1000), 
+                    duration: 0 
+                }));
+            }
+        }
+      } catch (e) {
+          console.error('HTML scrape failed', e.message);
+      }
+    }
     
     let upName = '', upFace = '';
+    
+    // 3. 尝试API获取UP主信息
     try {
       const info = await getUPInfo(mid);
       if (info?.data) {
@@ -542,7 +580,19 @@ function setupIPC() {
         upFace = normalizeCoverUrl(info.data.face);
       }
     } catch {}
-    
+
+    // 4. 尝试从主页HTML获取UP主信息 (Fallback)
+    if (!upName || !upFace) {
+      try {
+        const homeResp = await axios.get(`https://space.bilibili.com/${mid}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const html = homeResp.data || '';
+        const nm = html.match(/"name":"([^"]+)"/);
+        const fc = html.match(/"face":"(https?:\/\/[^\"]+)"/);
+        if (!upName && nm) upName = nm[1];
+        if (!upFace && fc) upFace = normalizeCoverUrl(fc[1]);
+      } catch {}
+    }
+
     const list = archives.map(a => ({
       bvid: a.bvid,
       title: a.title || '',
@@ -552,6 +602,17 @@ function setupIPC() {
       duration: a.duration || 0,
       url: a.bvid ? `https://www.bilibili.com/video/${a.bvid}` : ''
     })).filter(item => !exclude.has(item.bvid));
+
+    // 5. 尝试从第一个视频信息中获取UP主信息 (Last Resort)
+    if ((!upName || !upFace) && list.length > 0 && list[0].bvid) {
+      try {
+        const vinfo = await getVideoInfo(list[0].bvid);
+        if (vinfo?.data?.owner) {
+          if (!upName) upName = vinfo.data.owner.name;
+          if (!upFace) upFace = normalizeCoverUrl(vinfo.data.owner.face);
+        }
+      } catch {}
+    }
 
     if (totalCount > 0) {
       hasMore = totalCount > (exclude.size + archives.length) && archives.length === ps;
