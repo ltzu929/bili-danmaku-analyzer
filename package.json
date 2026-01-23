@@ -4,11 +4,10 @@
   "description": "智能B站视频弹幕分析工具，支持弹幕密度分析、热门弹幕识别、多维度数据筛选",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"vite\"",
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "server": "node api/server.js",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
@@ -42,9 +41,7 @@
   "type": "module",
   "dependencies": {
     "axios": "^1.6.0",
-    "cors": "^2.8.5",
     "electron-store": "^11.0.2",
-    "express": "^4.18.2",
     "lucide-react": "^0.263.1",
     "node-cron": "^4.2.1",
     "react": "^18.3.1",
@@ -86,11 +83,11 @@
     "appId": "com.example.bilibili.danmaku",
     "directories": {
       "output": "release",
-      "buildResources": "src/assets" 
+      "buildResources": "src/assets"
     },
     "win": {
       "target": "portable",
-      "icon": "src/assets/icon.ico" 
+      "icon": "src/assets/icon.ico"
     },
     "publish": [
       {

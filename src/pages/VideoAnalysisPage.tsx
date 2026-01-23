@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState, useCallback } from 'react';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, apiFetch } from '@/lib/api';
 import { ArrowLeft, Download, ExternalLink, User } from 'lucide-react';
 import DanmakuChart from '../components/DanmakuChart';
 import DanmakuHighEnergyList from '../components/DanmakuHighEnergyList';
@@ -46,7 +46,7 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
     const load = async () => {
       if (!cover && data.bvid) {
         try {
-          const resp = await fetch(`/api/video/${data.bvid}`);
+          const resp = await apiFetch(`/api/video/${data.bvid}`);
           if (resp.ok) {
             const json = await resp.json();
             if (!ignore) setCover(json.cover || '');
@@ -73,7 +73,7 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
     URL.revokeObjectURL(url);
   };
 
-  // 下载封面：通过后端封面代理接口获取二进制并触发浏览器下载
+  // 下载封面：通过IPC接口保存到本地
   const handleDownloadCover = async () => {
     try {
       if (!cover) return;
@@ -88,35 +88,22 @@ export default function VideoAnalysisPage({ data, onReturnHome }: VideoAnalysisP
         console.error('Failed to read settings:', e);
       }
 
-      if (targetPath) {
-        const resp = await fetch(apiUrl('/api/save-cover'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: cover, bvid: data.bvid, dir: targetPath })
-        });
-        if (resp.ok) {
-          const json = await resp.json();
-          alert(`封面已保存到: ${json.path}`);
-          return;
-        }
+      // 如果未设置路径，后端默认会保存到 Downloads 目录
+      const resp = await apiFetch('/api/save-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: cover, bvid: data.bvid, dir: targetPath })
+      });
+      
+      if (resp.ok) {
+        const json = await resp.json();
+        alert(`封面已保存到: ${json.path}`);
+      } else {
+        alert('保存失败，请稍后重试');
       }
-
-      const coverProxy = apiUrl(`/api/cover?url=${encodeURIComponent(cover)}`);
-      const resp = await fetch(coverProxy);
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const extMatch = (cover.split('.').pop() || '').toLowerCase();
-      const ext = ['png','jpg','jpeg','webp'].includes(extMatch) ? extMatch : 'jpg';
-      link.href = url;
-      link.download = `cover_${data.bvid || 'video'}.${ext}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Failed to download cover:', e);
+      alert('保存失败');
     }
   };
 

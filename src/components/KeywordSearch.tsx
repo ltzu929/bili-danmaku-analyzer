@@ -19,8 +19,6 @@ interface SearchResult {
   total: number;
 }
 
-const API_BASE = 'http://localhost:3001/api';
-
 export default function KeywordSearch({ bvid, date, keywords }: KeywordSearchProps) {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);

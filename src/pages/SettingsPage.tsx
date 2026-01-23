@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from 'react'
+import { apiFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,7 +34,7 @@ export default function SettingsPage() {
     (async () => {
       try {
         if (!settings.coverDownloadPath) {
-          const resp = await fetch('/api/system/downloads-path')
+          const resp = await apiFetch('/api/system/downloads-path')
           if (resp.ok) {
             const json = await resp.json()
             setDefaultDownloads(json.path || '')
@@ -63,7 +64,7 @@ export default function SettingsPage() {
   const clearServerCache = async () => {
     setClearing(true)
     try {
-      await fetch('/api/cache', { method: 'DELETE' })
+      await apiFetch('/api/cache', { method: 'DELETE' })
     } catch { /* ignore */ }
     setClearing(false)
   }
